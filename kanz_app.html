@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanz — Live Prospectivity Viewer</title>
+<style>
+  :root{
+    --ink:#14100d; --panel:#1e1812; --sand:#EFE6D4; --sand-dim:#a89e8a;
+    --rust:#c4451f; --ochre:#d9a441; --line:rgba(239,230,212,0.14);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--ink); color:var(--sand); font-family:'Segoe UI',system-ui,sans-serif;}
+  header{padding:16px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .mark{width:30px;height:30px;border-radius:4px;background:linear-gradient(135deg,var(--rust),var(--ochre));
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#14100d;}
+  .brand h1{font-size:18px; margin:0;}
+  .status{font-size:12px; color:var(--sand-dim); font-family:monospace;}
+  .status.live::before{content:'●'; color:#4caf50; margin-right:6px;}
+  .lang-switch{display:flex; gap:4px; background:rgba(255,255,255,0.05); padding:4px; border-radius:8px;}
+  .lang-switch button{background:transparent; border:none; color:var(--sand-dim); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;}
+  .lang-switch button.active{background:var(--rust); color:var(--sand);}
+
+  .layout{display:grid; grid-template-columns:280px 1fr; min-height:calc(100vh - 63px);}
+  [dir="rtl"] .layout{grid-template-columns:1fr 280px;}
+  [dir="rtl"] .controls{order:2; border-right:none; border-left:1px solid var(--line);}
+  .controls{border-right:1px solid var(--line); padding:24px; background:var(--panel); overflow-y:auto;}
+  .control-group{margin-bottom:26px;}
+  .control-group label{display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ochre); margin-bottom:9px; font-weight:600;}
+  select, input[type=range]{width:100%;}
+  select{background:var(--ink); color:var(--sand); border:1px solid var(--line); padding:9px 10px; border-radius:6px; font-size:14px;}
+  input[type=range]{accent-color:var(--rust); height:6px;}
+  .range-value{font-family:monospace; font-size:12px; color:var(--sand-dim); margin-top:6px;}
+  .stat-row{display:flex; justify-content:space-between; padding:7px 0; border-top:1px solid var(--line); font-size:13px;}
+  .stat-row span:first-child{color:var(--sand-dim);}
+  .stat-row span:last-child{font-family:monospace; color:var(--ochre);}
+  .toggle-row{display:flex; gap:6px; margin-top:10px; flex-wrap:wrap;}
+  .toggle-row button{flex:1; min-width:80px; padding:8px 6px; background:var(--ink); border:1px solid var(--line); color:var(--sand-dim); border-radius:6px; cursor:pointer; font-size:11px;}
+  .toggle-row button.active{background:var(--rust); color:var(--sand); border-color:var(--rust);}
+  .cluster-legend{display:flex; flex-direction:column; gap:6px; margin-top:10px;}
+  .cluster-legend-item{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--sand-dim);}
+  .cluster-swatch{width:14px; height:14px; border-radius:3px; flex-shrink:0;}
+
+  .viewer{padding:24px; display:flex; flex-direction:column; align-items:center; overflow:auto;}
+  .map-frame{position:relative; width:100%; max-width:1400px; display:flex; gap:0;}
+  .canvas-wrap{position:relative; border:1px solid var(--line); border-radius:6px; overflow:hidden; flex:1;}
+  canvas{display:block; cursor:crosshair; width:100%; height:auto;}
+  #gridOverlay{position:absolute; inset:0; pointer-events:none;}
+  #tooltip{position:absolute; pointer-events:none; background:rgba(20,16,13,0.96); border:1px solid var(--ochre); border-radius:4px; padding:7px 11px; font-family:monospace; font-size:12px; display:none; z-index:10; white-space:nowrap;}
+  .legend{display:flex; align-items:center; gap:12px; margin-top:16px; font-size:12px; color:var(--sand-dim);}
+  .legend-bar{width:220px; height:12px; border-radius:3px; background:linear-gradient(to right, #000, #7a2410, #c4451f, #d9a441, #fff);}
+  .caption{margin-top:18px; font-size:12px; color:var(--sand-dim); font-family:monospace; text-align:center;}
+  .loading{padding:60px; text-align:center; color:var(--sand-dim);}
+  .axis-label{position:absolute; font-family:monospace; font-size:10px; color:var(--sand-dim); background:rgba(20,16,13,0.7); padding:1px 4px; border-radius:2px;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark">K</div>
+    <h1 data-i18n="title">Kanz — Live Prospectivity Viewer</h1>
+  </div>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <div class="status live" id="statusText">loading...</div>
+    <div class="lang-switch">
+      <button data-lang="en" class="active">EN</button>
+      <button data-lang="fr">FR</button>
+      <button data-lang="ar">عربي</button>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="controls">
+    <div class="control-group">
+      <label data-i18n="l-index">Spectral index</label>
+      <select id="indexSelect">
+        <option value="iron" data-i18n="opt-iron">Iron oxide (B4/B2)</option>
+        <option value="ferrous" data-i18n="opt-ferrous">Ferrous iron (B12/B8)</option>
+        <option value="clay" data-i18n="opt-clay">Clay / hydroxyl (B11/B12)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label data-i18n="l-view">View mode</label>
+      <div class="toggle-row">
+        <button id="viewHeat" class="active" data-i18n="v-heat">Heatmap</button>
+        <button id="viewCandidate" data-i18n="v-candidate">Candidate</button>
+        <button id="viewCluster" data-i18n="v-cluster">Clusters</button>
+      </div>
+    </div>
+
+    <div class="control-group" id="thresholdGroup">
+      <label data-i18n="l-threshold">Candidate threshold</label>
+      <input type="range" id="thresholdSlider" min="0" max="100" value="70">
+      <div class="range-value" id="thresholdValue">—</div>
+    </div>
+
+    <div class="control-group" id="clusterGroup" style="display:none;">
+      <label data-i18n="l-clusters">Number of clusters</label>
+      <input type="range" id="clusterSlider" min="2" max="6" value="4">
+      <div class="range-value" id="clusterValue">4 groups</div>
+      <div class="cluster-legend" id="clusterLegend"></div>
+    </div>
+
+    <div class="control-group">
+      <label data-i18n="l-stats">Live stats</label>
+      <div class="stat-row"><span data-i18n="s-min">Min</span><span id="statMin">—</span></div>
+      <div class="stat-row"><span data-i18n="s-max">Max</span><span id="statMax">—</span></div>
+      <div class="stat-row"><span data-i18n="s-mean">Mean</span><span id="statMean">—</span></div>
+      <div class="stat-row"><span data-i18n="s-count">Highlighted pixels</span><span id="statCount">—</span></div>
+      <div class="stat-row"><span data-i18n="s-area">Approx. area</span><span id="statArea">—</span></div>
+    </div>
+
+    <div class="control-group">
+      <label data-i18n="l-cursor">Cursor readout</label>
+      <div class="stat-row"><span data-i18n="s-iron">Iron</span><span id="cursorIron">—</span></div>
+      <div class="stat-row"><span data-i18n="s-ferrous">Ferrous</span><span id="cursorFerrous">—</span></div>
+      <div class="stat-row"><span data-i18n="s-clay">Clay</span><span id="cursorClay">—</span></div>
+      <div class="stat-row"><span data-i18n="s-coord">Location</span><span id="cursorCoord">—</span></div>
+    </div>
+  </div>
+
+  <div class="viewer">
+    <div id="loadingMsg" class="loading" data-i18n="loading">Loading kanz_data.json…</div>
+    <div class="map-frame">
+      <div class="canvas-wrap" id="canvasWrap" style="display:none;">
+        <canvas id="mainCanvas"></canvas>
+        <div id="gridOverlay"></div>
+        <div id="tooltip"></div>
+      </div>
+    </div>
+    <div class="legend" id="legendWrap" style="display:none;">
+      <span data-i18n="s-low">Low</span><div class="legend-bar" id="legendBar"></div><span data-i18n="s-high">High</span>
+    </div>
+    <div class="caption" id="captionText"></div>
+  </div>
+</div>
+
+<script>
+const i18n = {
+  en:{dir:'ltr', title:'Kanz — Live Prospectivity Viewer', 'l-index':'Spectral index','opt-iron':'Iron oxide (B4/B2)','opt-ferrous':'Ferrous iron (B12/B8)','opt-clay':'Clay / hydroxyl (B11/B12)',
+    'l-view':'View mode','v-heat':'Heatmap','v-candidate':'Candidate','v-cluster':'Clusters',
+    'l-threshold':'Candidate threshold','l-clusters':'Number of clusters',
+    'l-stats':'Live stats','s-min':'Min','s-max':'Max','s-mean':'Mean','s-count':'Highlighted pixels','s-area':'Approx. area',
+    'l-cursor':'Cursor readout','s-iron':'Iron','s-ferrous':'Ferrous','s-clay':'Clay','s-coord':'Location',
+    's-low':'Low','s-high':'High','loading':'Loading kanz_data.json…'},
+  fr:{dir:'ltr', title:'Kanz — Visualiseur en direct', 'l-index':'Indice spectral','opt-iron':'Oxyde de fer (B4/B2)','opt-ferrous':'Fer ferreux (B12/B8)','opt-clay':'Argile / hydroxyle (B11/B12)',
+    'l-view':'Mode d\'affichage','v-heat':'Carte thermique','v-candidate':'Zones candidates','v-cluster':'Groupes',
+    'l-threshold':'Seuil candidat','l-clusters':'Nombre de groupes',
+    'l-stats':'Statistiques en direct','s-min':'Min','s-max':'Max','s-mean':'Moyenne','s-count':'Pixels surlignés','s-area':'Surface approx.',
+    'l-cursor':'Lecture du curseur','s-iron':'Fer','s-ferrous':'Ferreux','s-clay':'Argile','s-coord':'Position',
+    's-low':'Faible','s-high':'Élevé','loading':'Chargement de kanz_data.json…'},
+  ar:{dir:'rtl', title:'كنز — عارض الاحتمالية الحي', 'l-index':'المؤشر الطيفي','opt-iron':'أكسيد الحديد (B4/B2)','opt-ferrous':'الحديد الحديدي (B12/B8)','opt-clay':'الطين (B11/B12)',
+    'l-view':'وضع العرض','v-heat':'خريطة حرارية','v-candidate':'مناطق مرشحة','v-cluster':'مجموعات',
+    'l-threshold':'عتبة المرشح','l-clusters':'عدد المجموعات',
+    'l-stats':'إحصائيات حية','s-min':'الأدنى','s-max':'الأقصى','s-mean':'المتوسط','s-count':'البكسلات المميزة','s-area':'المساحة التقريبية',
+    'l-cursor':'قراءة المؤشر','s-iron':'حديد','s-ferrous':'حديدي','s-clay':'طين','s-coord':'الموقع',
+    's-low':'منخفض','s-high':'مرتفع','loading':'جارٍ تحميل kanz_data.json…'}
+};
+function setLang(lang){
+  const d = i18n[lang];
+  document.getElementById('htmlRoot').setAttribute('lang', lang);
+  document.getElementById('htmlRoot').setAttribute('dir', d.dir);
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.getAttribute('data-i18n');
+    if(d[k]) el.textContent = d[k];
+  });
+  document.querySelectorAll('.lang-switch button').forEach(b=> b.classList.toggle('active', b.dataset.lang===lang));
+}
+document.querySelectorAll('.lang-switch button').forEach(btn=> btn.addEventListener('click', ()=> setLang(btn.dataset.lang)));
+
+// --- Real region bounds used during export (kanz_export.py): [-7.05, 26.83, -6.39, 26.93] ---
+const BOUNDS = {lonMin:-7.05, latMin:26.83, lonMax:-6.39, latMax:26.93};
+
+let DATA = null;
+let currentIndex = 'iron';
+let viewMode = 'heat';
+let clusterAssignments = null;
+let clusterColors = ['#c4451f','#d9a441','#4a7c6f','#5b7ea6','#9b5fa0','#7a2410'];
+
+const statusText = document.getElementById('statusText');
+const loadingMsg = document.getElementById('loadingMsg');
+const canvasWrap = document.getElementById('canvasWrap');
+const legendWrap = document.getElementById('legendWrap');
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+const tooltip = document.getElementById('tooltip');
+const gridOverlay = document.getElementById('gridOverlay');
+
+fetch('kanz_data.json')
+  .then(r => { if(!r.ok) throw new Error('not found'); return r.json(); })
+  .then(json => {
+    DATA = json;
+    statusText.textContent = `live · ${json.shape[0]}×${json.shape[1]} px · real Sentinel-2 data`;
+    loadingMsg.style.display = 'none';
+    canvasWrap.style.display = 'block';
+    legendWrap.style.display = 'flex';
+    buildGrid();
+    render();
+  })
+  .catch(err => {
+    loadingMsg.innerHTML = `
+      <strong>Could not load kanz_data.json</strong><br><br>
+      Put it in the same folder as this HTML file, and open this page through a local server:<br><br>
+      <code style="color:#d9a441">python -m http.server 8000</code><br><br>
+      Then visit: <code style="color:#d9a441">http://localhost:8000/kanz_app.html</code>
+    `;
+    statusText.textContent = 'no data';
+  });
+
+function colorFor(value, min, max){
+  const t = Math.max(0, Math.min(1, (value - min) / (max - min)));
+  const stops = [[0,[10,8,6]],[0.30,[122,36,16]],[0.60,[196,69,31]],[0.85,[217,164,65]],[1,[255,255,255]]];
+  for(let i=0;i<stops.length-1;i++){
+    const [t0,c0]=stops[i], [t1,c1]=stops[i+1];
+    if(t>=t0 && t<=t1){
+      const f=(t-t0)/(t1-t0);
+      return [Math.round(c0[0]+f*(c1[0]-c0[0])), Math.round(c0[1]+f*(c1[1]-c0[1])), Math.round(c0[2]+f*(c1[2]-c0[2]))];
+    }
+  }
+  return [255,255,255];
+}
+
+function hexToRgb(hex){
+  const v = parseInt(hex.slice(1),16);
+  return [(v>>16)&255,(v>>8)&255,v&255];
+}
+
+function runKMeans(k){
+  const [h,w] = DATA.shape;
+  const points = [];
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      points.push([DATA.iron[y][x], DATA.ferrous[y][x], DATA.clay[y][x]]);
+    }
+  }
+  const dims = 3;
+  const mins = [Infinity,Infinity,Infinity], maxs=[-Infinity,-Infinity,-Infinity];
+  points.forEach(p=>{ for(let d=0; d<dims; d++){ if(p[d]<mins[d]) mins[d]=p[d]; if(p[d]>maxs[d]) maxs[d]=p[d]; }});
+  const norm = points.map(p=> p.map((v,d)=> (v-mins[d])/(maxs[d]-mins[d]||1)));
+
+  let centroids = [];
+  for(let i=0;i<k;i++){
+    centroids.push(norm[Math.floor(i * norm.length / k)]);
+  }
+
+  let assignments = new Array(norm.length).fill(0);
+  for(let iter=0; iter<12; iter++){
+    for(let i=0;i<norm.length;i++){
+      let best=0, bestDist=Infinity;
+      for(let c=0;c<k;c++){
+        let dist=0;
+        for(let d=0;d<dims;d++) dist += (norm[i][d]-centroids[c][d])**2;
+        if(dist<bestDist){ bestDist=dist; best=c; }
+      }
+      assignments[i]=best;
+    }
+    const sums = Array.from({length:k}, ()=>[0,0,0]);
+    const counts = new Array(k).fill(0);
+    for(let i=0;i<norm.length;i++){
+      const c = assignments[i];
+      counts[c]++;
+      for(let d=0;d<dims;d++) sums[c][d]+=norm[i][d];
+    }
+    for(let c=0;c<k;c++){
+      if(counts[c]>0) centroids[c] = sums[c].map(s=> s/counts[c]);
+    }
+  }
+
+  const ironMeans = new Array(k).fill(0);
+  const ironCounts = new Array(k).fill(0);
+  for(let i=0;i<points.length;i++){
+    ironMeans[assignments[i]] += points[i][0];
+    ironCounts[assignments[i]]++;
+  }
+  for(let c=0;c<k;c++) ironMeans[c] = ironCounts[c]>0 ? ironMeans[c]/ironCounts[c] : 0;
+
+  return {assignments2D: reshape(assignments, h, w), ironMeans};
+}
+
+function reshape(flat, h, w){
+  const out = [];
+  for(let y=0;y<h;y++) out.push(flat.slice(y*w, y*w+w));
+  return out;
+}
+
+function buildGrid(){
+  const lines = 5;
+  gridOverlay.innerHTML = '';
+  for(let i=0;i<=lines;i++){
+    const pct = i/lines;
+    const lon = (BOUNDS.lonMin + pct*(BOUNDS.lonMax-BOUNDS.lonMin)).toFixed(2);
+    const label = document.createElement('div');
+    label.className = 'axis-label';
+    label.style.left = (pct*100) + '%';
+    label.style.top = '2px';
+    label.textContent = lon + '°';
+    gridOverlay.appendChild(label);
+  }
+  for(let i=0;i<=lines;i++){
+    const pct = i/lines;
+    const lat = (BOUNDS.latMax - pct*(BOUNDS.latMax-BOUNDS.latMin)).toFixed(2);
+    const label = document.createElement('div');
+    label.className = 'axis-label';
+    label.style.left = '2px';
+    label.style.top = (pct*100) + '%';
+    label.textContent = lat + '°';
+    gridOverlay.appendChild(label);
+  }
+}
+
+function render(){
+  if(!DATA) return;
+  const arr = DATA[currentIndex];
+  const [h, w] = DATA.shape;
+  const flat = arr.flat();
+  const min = Math.min(...flat);
+  const max = Math.max(...flat);
+  const mean = flat.reduce((a,b)=>a+b,0)/flat.length;
+
+  document.getElementById('statMin').textContent = min.toFixed(2);
+  document.getElementById('statMax').textContent = max.toFixed(2);
+  document.getElementById('statMean').textContent = mean.toFixed(2);
+
+  const displayScale = Math.max(1, Math.round(1400 / w));
+  canvas.width = w * displayScale;
+  canvas.height = h * displayScale;
+  const imgData = ctx.createImageData(canvas.width, canvas.height);
+
+  let highlightCount = 0;
+
+  if(viewMode === 'cluster'){
+    const k = parseInt(document.getElementById('clusterSlider').value);
+    const result = runKMeans(k);
+    clusterAssignments = result.assignments2D;
+
+    const order = result.ironMeans.map((v,i)=>i).sort((a,b)=> result.ironMeans[a]-result.ironMeans[b]);
+    const legend = document.getElementById('clusterLegend');
+    legend.innerHTML = '';
+    order.forEach((clusterIdx, rank)=>{
+      const item = document.createElement('div');
+      item.className = 'cluster-legend-item';
+      item.innerHTML = `<div class="cluster-swatch" style="background:${clusterColors[rank % clusterColors.length]}"></div>
+        <span>Group ${rank+1} — avg iron ${result.ironMeans[clusterIdx].toFixed(2)}</span>`;
+      legend.appendChild(item);
+    });
+    const rankOf = {};
+    order.forEach((clusterIdx, rank)=> rankOf[clusterIdx] = rank);
+
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const c = clusterAssignments[y][x];
+        const rank = rankOf[c];
+        const [r,g,b] = hexToRgb(clusterColors[rank % clusterColors.length]);
+        for(let dy=0; dy<displayScale; dy++){
+          for(let dx=0; dx<displayScale; dx++){
+            const px = (x*displayScale+dx), py=(y*displayScale+dy);
+            const idx = (py*canvas.width+px)*4;
+            imgData.data[idx]=r; imgData.data[idx+1]=g; imgData.data[idx+2]=b; imgData.data[idx+3]=255;
+          }
+        }
+      }
+    }
+    document.getElementById('statCount').textContent = '—';
+    document.getElementById('statArea').textContent = '—';
+  } else {
+    const thresholdPct = document.getElementById('thresholdSlider').value;
+    const thresholdVal = min + (max - min) * (thresholdPct / 100);
+    document.getElementById('thresholdValue').textContent = `Top ${100-thresholdPct}% (≥ ${thresholdVal.toFixed(2)})`;
+
+    for(let y=0;y<h;y++){
+      for(let x=0;x<w;x++){
+        const v = arr[y][x];
+        const isCandidate = v >= thresholdVal;
+        if(isCandidate) highlightCount++;
+        let r,g,b;
+        if(viewMode==='heat'){
+          [r,g,b] = colorFor(v, min, max);
+        } else {
+          if(isCandidate){ r=217;g=164;b=65; } else { r=25;g=20;b=16; }
+        }
+        for(let dy=0; dy<displayScale; dy++){
+          for(let dx=0; dx<displayScale; dx++){
+            const px=(x*displayScale+dx), py=(y*displayScale+dy);
+            const idx=(py*canvas.width+px)*4;
+            imgData.data[idx]=r; imgData.data[idx+1]=g; imgData.data[idx+2]=b; imgData.data[idx+3]=255;
+          }
+        }
+      }
+    }
+    document.getElementById('statCount').textContent = `${highlightCount} / ${flat.length}`;
+    document.getElementById('statArea').textContent = `${(highlightCount/flat.length*100).toFixed(1)}%`;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  const labels = {iron:'Iron oxide index (B4/B2)', ferrous:'Ferrous iron index (B12/B8)', clay:'Clay/hydroxyl index (B11/B12)'};
+  document.getElementById('captionText').textContent =
+    `${labels[currentIndex]} · Gara Djebilet, Tindouf, Algeria · real Sentinel-2 median composite`;
+}
+
+document.getElementById('indexSelect').addEventListener('change', e=>{ currentIndex = e.target.value; render(); });
+document.getElementById('thresholdSlider').addEventListener('input', render);
+document.getElementById('clusterSlider').addEventListener('input', e=>{
+  document.getElementById('clusterValue').textContent = e.target.value + ' groups';
+  render();
+});
+
+function setView(mode){
+  viewMode = mode;
+  ['viewHeat','viewCandidate','viewCluster'].forEach(id=> document.getElementById(id).classList.remove('active'));
+  document.getElementById('view' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+  document.getElementById('thresholdGroup').style.display = (mode==='cluster') ? 'none' : 'block';
+  document.getElementById('clusterGroup').style.display = (mode==='cluster') ? 'block' : 'none';
+  document.getElementById('legendWrap').style.display = (mode==='cluster') ? 'none' : 'flex';
+  render();
+}
+document.getElementById('viewHeat').addEventListener('click', ()=> setView('heat'));
+document.getElementById('viewCandidate').addEventListener('click', ()=> setView('candidate'));
+document.getElementById('viewCluster').addEventListener('click', ()=> setView('cluster'));
+
+canvas.addEventListener('mousemove', e=>{
+  if(!DATA) return;
+  const rect = canvas.getBoundingClientRect();
+  const [h,w] = DATA.shape;
+  const x = Math.floor((e.clientX - rect.left) / rect.width * w);
+  const y = Math.floor((e.clientY - rect.top) / rect.height * h);
+  if(x<0||y<0||x>=w||y>=h) return;
+
+  document.getElementById('cursorIron').textContent = DATA.iron[y][x].toFixed(2);
+  document.getElementById('cursorFerrous').textContent = DATA.ferrous[y][x].toFixed(2);
+  document.getElementById('cursorClay').textContent = DATA.clay[y][x].toFixed(2);
+
+  const lon = (BOUNDS.lonMin + (x/w)*(BOUNDS.lonMax-BOUNDS.lonMin)).toFixed(3);
+  const lat = (BOUNDS.latMax - (y/h)*(BOUNDS.latMax-BOUNDS.latMin)).toFixed(3);
+  document.getElementById('cursorCoord').textContent = `${lat}°, ${lon}°`;
+
+  tooltip.style.display = 'block';
+  tooltip.style.left = (e.clientX - rect.left + 14) + 'px';
+  tooltip.style.top = (e.clientY - rect.top + 14) + 'px';
+  tooltip.textContent = `${lat}°N, ${lon}°W`;
+});
+canvas.addEventListener('mouseleave', ()=> tooltip.style.display='none');
+</script>
+</body>
+</html>
