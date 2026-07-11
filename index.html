@@ -53,6 +53,34 @@
   .caption{margin-top:18px; font-size:12px; color:var(--sand-dim); font-family:monospace; text-align:center;}
   .loading{padding:60px; text-align:center; color:var(--sand-dim);}
   .axis-label{position:absolute; font-family:monospace; font-size:10px; color:var(--sand-dim); background:rgba(20,16,13,0.7); padding:1px 4px; border-radius:2px;}
+
+  .explain-box{
+    margin-top:20px; max-width:900px; width:100%; padding:20px 24px;
+    background:rgba(255,255,255,0.03); border:1px solid var(--line); border-radius:8px;
+  }
+  .explain-box h3{margin:0 0 10px; font-size:14px; color:var(--ochre); font-weight:600;}
+  .explain-box p{margin:0 0 10px; font-size:13.5px; color:var(--sand-dim); line-height:1.6;}
+  .explain-box p:last-child{margin-bottom:0;}
+  .explain-box .warn{color:var(--ochre); font-weight:600;}
+
+  .info-btn{
+    background:transparent; border:1px solid var(--line); color:var(--sand-dim);
+    padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; font-weight:600;
+  }
+  .info-btn:hover{border-color:var(--ochre); color:var(--ochre);}
+  .info-panel{
+    display:none; max-width:900px; width:100%; margin-top:16px; padding:22px 26px;
+    background:var(--panel); border:1px solid var(--ochre); border-radius:8px;
+  }
+  .info-panel.open{display:block;}
+  .info-panel h3{margin:0 0 8px; font-size:15px; color:var(--ochre);}
+  .info-panel .step{display:flex; gap:14px; margin-bottom:16px;}
+  .info-panel .step-num{
+    flex-shrink:0; width:26px; height:26px; border-radius:50%; background:var(--rust);
+    display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:var(--sand);
+  }
+  .info-panel .step-text{font-size:13.5px; color:var(--sand-dim); line-height:1.6;}
+  .info-panel .step-text strong{color:var(--sand);}
 </style>
 </head>
 <body>
@@ -69,6 +97,7 @@
       <button data-lang="fr">FR</button>
       <button data-lang="ar">عربي</button>
     </div>
+    <button class="info-btn" id="infoToggle" data-i18n="btn-howto">? How to read this</button>
   </div>
 </header>
 
@@ -136,6 +165,44 @@
       <span data-i18n="s-low">Low</span><div class="legend-bar" id="legendBar"></div><span data-i18n="s-high">High</span>
     </div>
     <div class="caption" id="captionText"></div>
+
+    <div class="explain-box" id="explainBox">
+      <h3 data-i18n="ex-title">What am I looking at?</h3>
+      <p id="explainMode"></p>
+      <p><span class="warn" data-i18n="ex-warnLabel">Important:</span> <span id="explainWarn"></span></p>
+    </div>
+
+    <div class="info-panel" id="infoPanel">
+      <h3 data-i18n="ip-title">How to read Kanz, step by step</h3>
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text" data-i18n="ip-step1">This map is not a photo — it's real satellite measurements turned into color. Each pixel's color shows how strongly that spot reflects certain wavelengths of light, which can hint at mineral content.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text" data-i18n="ip-step2">Brighter/whiter areas = higher index value = stronger signal for that specific mineral indicator. Darker areas = weaker signal. This does NOT mean "definitely ore" — it means "worth a closer look."</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text" data-i18n="ip-step3">The "Spectral index" dropdown changes WHICH mineral signal you're viewing: iron oxide (surface rust-like minerals), ferrous iron (a different iron mineral form), or clay (associated with certain alteration zones).</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text" data-i18n="ip-step4">"Candidate" view picks out only the brightest top percentage of the map (you control how much with the slider) and highlights it — a simple way to flag zones for follow-up, not a confirmed boundary.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-text" data-i18n="ip-step5">"Clusters" view groups pixels that behave similarly across all three signals at once, using an algorithm (K-means) that finds patterns without being told the answer first. Each color is a distinct group — not a confidence score.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-text" data-i18n="ip-step6">Hover anywhere on the map to see the exact numeric values and real GPS coordinates for that point — useful if you want to cross-check a location against other geological data.</div>
+      </div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-text" data-i18n="ip-step7">Bottom line: this tool flags where to look closer using free satellite data and simple algorithms. It cannot replace drilling, ground surveys, or a geologist's judgment — think of it as a fast, free first filter.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -146,19 +213,67 @@ const i18n = {
     'l-threshold':'Candidate threshold','l-clusters':'Number of clusters',
     'l-stats':'Live stats','s-min':'Min','s-max':'Max','s-mean':'Mean','s-count':'Highlighted pixels','s-area':'Approx. area',
     'l-cursor':'Cursor readout','s-iron':'Iron','s-ferrous':'Ferrous','s-clay':'Clay','s-coord':'Location',
-    's-low':'Low','s-high':'High','loading':'Loading kanz_data.json…'},
+    's-low':'Low','s-high':'High','loading':'Loading kanz_data.json…',
+    'btn-howto':'? How to read this','ex-title':'What am I looking at?','ex-warnLabel':'Important:',
+    'ip-title':'How to read Kanz, step by step',
+    'ip-step1':'This map is not a photo — it\'s real satellite measurements turned into color. Each pixel\'s color shows how strongly that spot reflects certain wavelengths of light, which can hint at mineral content.',
+    'ip-step2':'Brighter/whiter areas = higher index value = stronger signal for that specific mineral indicator. Darker areas = weaker signal. This does NOT mean "definitely ore" — it means "worth a closer look."',
+    'ip-step3':'The "Spectral index" dropdown changes WHICH mineral signal you\'re viewing: iron oxide (surface rust-like minerals), ferrous iron (a different iron mineral form), or clay (associated with certain alteration zones).',
+    'ip-step4':'"Candidate" view picks out only the brightest top percentage of the map (you control how much with the slider) and highlights it — a simple way to flag zones for follow-up, not a confirmed boundary.',
+    'ip-step5':'"Clusters" view groups pixels that behave similarly across all three signals at once, using an algorithm (K-means) that finds patterns without being told the answer first. Each color is a distinct group — not a confidence score.',
+    'ip-step6':'Hover anywhere on the map to see the exact numeric values and real GPS coordinates for that point — useful if you want to cross-check a location against other geological data.',
+    'ip-step7':'Bottom line: this tool flags where to look closer using free satellite data and simple algorithms. It cannot replace drilling, ground surveys, or a geologist\'s judgment — think of it as a fast, free first filter.',
+    'exp-heat':'Each pixel is colored by its raw index value — no threshold applied. Whiter = higher value = stronger mineral signal at that exact spot. Use this view to explore the overall pattern before narrowing down.',
+    'exp-candidate':'Only pixels above your chosen threshold are highlighted in gold. Everything else is dimmed. This simulates "if I could only investigate the top X% of this area, where would I look?"',
+    'exp-cluster':'Pixels are grouped by overall similarity across all three indices together, not just one. Groups are ranked by average iron signal, but a group\'s real-world meaning still needs geological interpretation — the algorithm only knows "these pixels look alike," not "this is ore."',
+    'exp-warn-heat':'A bright pixel here is a surface reflectance pattern, not a confirmed mineral. Vegetation, shadow, and unrelated rock types can also produce high values.',
+    'exp-warn-candidate':'This threshold is arbitrary and adjustable — moving the slider changes what counts as "candidate." It is a screening aid, not a scientific boundary.',
+    'exp-warn-cluster':'Unsupervised clustering has no access to ground truth. Validate against known geology before treating any group as significant.'
+  },
   fr:{dir:'ltr', title:'Kanz — Visualiseur en direct', 'l-index':'Indice spectral','opt-iron':'Oxyde de fer (B4/B2)','opt-ferrous':'Fer ferreux (B12/B8)','opt-clay':'Argile / hydroxyle (B11/B12)',
     'l-view':'Mode d\'affichage','v-heat':'Carte thermique','v-candidate':'Zones candidates','v-cluster':'Groupes',
     'l-threshold':'Seuil candidat','l-clusters':'Nombre de groupes',
     'l-stats':'Statistiques en direct','s-min':'Min','s-max':'Max','s-mean':'Moyenne','s-count':'Pixels surlignés','s-area':'Surface approx.',
     'l-cursor':'Lecture du curseur','s-iron':'Fer','s-ferrous':'Ferreux','s-clay':'Argile','s-coord':'Position',
-    's-low':'Faible','s-high':'Élevé','loading':'Chargement de kanz_data.json…'},
+    's-low':'Faible','s-high':'Élevé','loading':'Chargement de kanz_data.json…',
+    'btn-howto':'? Comment lire ceci','ex-title':'Qu\'est-ce que je regarde ?','ex-warnLabel':'Important :',
+    'ip-title':'Comment lire Kanz, étape par étape',
+    'ip-step1':'Cette carte n\'est pas une photo — ce sont de vraies mesures satellite converties en couleur. La couleur de chaque pixel montre l\'intensité de réflexion de certaines longueurs d\'onde, ce qui peut indiquer une teneur minérale.',
+    'ip-step2':'Zones plus claires/blanches = valeur d\'indice plus élevée = signal plus fort pour cet indicateur minéral. Zones plus sombres = signal plus faible. Cela ne signifie PAS "minerai confirmé" — cela signifie "à examiner de plus près."',
+    'ip-step3':'Le menu "Indice spectral" change QUEL signal minéral vous visualisez : oxyde de fer (minéraux de surface type rouille), fer ferreux (une autre forme de minéral de fer), ou argile (associée à certaines zones d\'altération).',
+    'ip-step4':'La vue "Zones candidates" isole uniquement le pourcentage le plus élevé de la carte (vous contrôlez ce pourcentage avec le curseur) et le met en évidence — un moyen simple de signaler des zones à approfondir, pas une limite confirmée.',
+    'ip-step5':'La vue "Groupes" regroupe les pixels qui se comportent de manière similaire sur les trois signaux à la fois, via un algorithme (K-means) qui trouve des motifs sans connaître la réponse à l\'avance. Chaque couleur est un groupe distinct — pas un score de confiance.',
+    'ip-step6':'Survolez la carte pour voir les valeurs numériques exactes et les coordonnées GPS réelles de ce point — utile pour croiser un emplacement avec d\'autres données géologiques.',
+    'ip-step7':'En résumé : cet outil signale où regarder de plus près à l\'aide de données satellite gratuites et d\'algorithmes simples. Il ne peut pas remplacer le forage, les relevés de terrain ou le jugement d\'un géologue — pensez-y comme un premier filtre rapide et gratuit.',
+    'exp-heat':'Chaque pixel est coloré selon sa valeur d\'indice brute — aucun seuil appliqué. Plus blanc = valeur plus élevée = signal minéral plus fort à cet endroit précis. Utilisez cette vue pour explorer le motif général avant d\'affiner.',
+    'exp-candidate':'Seuls les pixels au-dessus du seuil choisi sont mis en évidence en doré. Le reste est atténué. Cela simule : "si je ne pouvais examiner que les X % les plus élevés de cette zone, où devrais-je regarder ?"',
+    'exp-cluster':'Les pixels sont regroupés selon leur similarité globale sur les trois indices à la fois, pas un seul. Les groupes sont classés par signal de fer moyen, mais leur signification réelle nécessite encore une interprétation géologique — l\'algorithme sait seulement "ces pixels se ressemblent", pas "ceci est du minerai."',
+    'exp-warn-heat':'Un pixel clair ici est un motif de réflectance de surface, pas un minéral confirmé. La végétation, l\'ombre et d\'autres types de roches peuvent aussi produire des valeurs élevées.',
+    'exp-warn-candidate':'Ce seuil est arbitraire et ajustable — déplacer le curseur change ce qui compte comme "candidat." C\'est une aide au tri, pas une limite scientifique.',
+    'exp-warn-cluster':'Le regroupement non supervisé n\'a accès à aucune vérité de terrain. Validez par rapport à la géologie connue avant de considérer un groupe comme significatif.'
+  },
   ar:{dir:'rtl', title:'كنز — عارض الاحتمالية الحي', 'l-index':'المؤشر الطيفي','opt-iron':'أكسيد الحديد (B4/B2)','opt-ferrous':'الحديد الحديدي (B12/B8)','opt-clay':'الطين (B11/B12)',
     'l-view':'وضع العرض','v-heat':'خريطة حرارية','v-candidate':'مناطق مرشحة','v-cluster':'مجموعات',
     'l-threshold':'عتبة المرشح','l-clusters':'عدد المجموعات',
     'l-stats':'إحصائيات حية','s-min':'الأدنى','s-max':'الأقصى','s-mean':'المتوسط','s-count':'البكسلات المميزة','s-area':'المساحة التقريبية',
     'l-cursor':'قراءة المؤشر','s-iron':'حديد','s-ferrous':'حديدي','s-clay':'طين','s-coord':'الموقع',
-    's-low':'منخفض','s-high':'مرتفع','loading':'جارٍ تحميل kanz_data.json…'}
+    's-low':'منخفض','s-high':'مرتفع','loading':'جارٍ تحميل kanz_data.json…',
+    'btn-howto':'؟ كيف تقرأ هذا','ex-title':'ماذا أشاهد؟','ex-warnLabel':'مهم:',
+    'ip-title':'كيفية قراءة كنز، خطوة بخطوة',
+    'ip-step1':'هذه الخريطة ليست صورة — إنها قياسات ساتلية حقيقية تم تحويلها إلى ألوان. يُظهر لون كل بكسل مدى قوة انعكاس ذلك الموقع لأطوال موجية معينة من الضوء، والتي يمكن أن تشير إلى محتوى معدني.',
+    'ip-step2':'المناطق الأكثر سطوعًا/بياضًا = قيمة مؤشر أعلى = إشارة أقوى لهذا المؤشر المعدني المحدد. المناطق الأغمق = إشارة أضعف. هذا لا يعني "خام مؤكد" — بل يعني "يستحق نظرة أقرب."',
+    'ip-step3':'القائمة المنسدلة "المؤشر الطيفي" تغيّر أي إشارة معدنية تشاهدها: أكسيد الحديد (معادن سطحية شبيهة بالصدأ)، الحديد الحديدي (شكل آخر من معدن الحديد)، أو الطين (مرتبط بمناطق تغير معينة).',
+    'ip-step4':'عرض "مرشح" يختار فقط النسبة الأعلى سطوعًا من الخريطة (أنت تتحكم في مقدارها بواسطة المنزلق) ويبرزها — طريقة بسيطة لتحديد المناطق للمتابعة، وليست حدودًا مؤكدة.',
+    'ip-step5':'عرض "مجموعات" يجمع البكسلات التي تتصرف بشكل متشابه عبر الإشارات الثلاث معًا، باستخدام خوارزمية (K-means) تجد الأنماط دون معرفة الإجابة مسبقًا. كل لون هو مجموعة مميزة — وليس درجة ثقة.',
+    'ip-step6':'مرّر المؤشر فوق أي مكان على الخريطة لرؤية القيم الرقمية الدقيقة وإحداثيات GPS الحقيقية لتلك النقطة — مفيد إذا أردت مقارنة موقع ما ببيانات جيولوجية أخرى.',
+    'ip-step7':'خلاصة القول: هذه الأداة تحدد أين تنظر عن قرب باستخدام بيانات ساتلية مجانية وخوارزميات بسيطة. لا يمكنها أن تحل محل الحفر أو المسوحات الميدانية أو حكم الجيولوجي — اعتبرها مرشحًا أوليًا سريعًا ومجانيًا.',
+    'exp-heat':'يُلوَّن كل بكسل حسب قيمة مؤشره الخام — دون تطبيق أي عتبة. الأكثر بياضًا = قيمة أعلى = إشارة معدنية أقوى في ذلك الموقع بالضبط. استخدم هذا العرض لاستكشاف النمط العام قبل التضييق.',
+    'exp-candidate':'يتم تمييز البكسلات الأعلى من العتبة المختارة فقط باللون الذهبي. البقية تُعتم. هذا يحاكي: "لو استطعت فحص أعلى X% فقط من هذه المنطقة، أين يجب أن أنظر؟"',
+    'exp-cluster':'يتم تجميع البكسلات حسب تشابهها العام عبر المؤشرات الثلاثة معًا، وليس واحدًا فقط. تُرتب المجموعات حسب متوسط إشارة الحديد، لكن معناها الحقيقي لا يزال يحتاج إلى تفسير جيولوجي — الخوارزمية تعرف فقط أن "هذه البكسلات متشابهة"، وليس "هذا خام."',
+    'exp-warn-heat':'البكسل الساطع هنا هو نمط انعكاس سطحي، وليس معدنًا مؤكدًا. يمكن للنباتات والظل وأنواع الصخور غير ذات الصلة أن تنتج أيضًا قيمًا عالية.',
+    'exp-warn-candidate':'هذه العتبة عشوائية وقابلة للتعديل — تحريك المنزلق يغيّر ما يُعتبر "مرشحًا." إنها أداة فرز مساعدة، وليست حدًا علميًا.',
+    'exp-warn-cluster':'التجميع غير الخاضع للإشراف لا يملك وصولاً إلى الحقيقة الأرضية. تحقق مقابل الجيولوجيا المعروفة قبل اعتبار أي مجموعة ذات دلالة.'
+  }
 };
 function setLang(lang){
   const d = i18n[lang];
@@ -170,7 +285,19 @@ function setLang(lang){
   });
   document.querySelectorAll('.lang-switch button').forEach(b=> b.classList.toggle('active', b.dataset.lang===lang));
 }
-document.querySelectorAll('.lang-switch button').forEach(btn=> btn.addEventListener('click', ()=> setLang(btn.dataset.lang)));
+document.querySelectorAll('.lang-switch button').forEach(btn=> btn.addEventListener('click', ()=>{ setLang(btn.dataset.lang); updateExplain(); }));
+
+document.getElementById('infoToggle').addEventListener('click', ()=>{
+  document.getElementById('infoPanel').classList.toggle('open');
+});
+
+function updateExplain(){
+  const lang = document.querySelector('.lang-switch button.active').dataset.lang;
+  const d = i18n[lang];
+  const modeKey = viewMode; // 'heat' | 'candidate' | 'cluster'
+  document.getElementById('explainMode').textContent = d['exp-' + modeKey];
+  document.getElementById('explainWarn').textContent = d['exp-warn-' + modeKey];
+}
 
 // --- Real region bounds used during export (kanz_export.py): [-7.05, 26.83, -6.39, 26.93] ---
 const BOUNDS = {lonMin:-7.05, latMin:26.83, lonMax:-6.39, latMax:26.93};
@@ -200,6 +327,7 @@ fetch('kanz_data.json')
     legendWrap.style.display = 'flex';
     buildGrid();
     render();
+    updateExplain();
   })
   .catch(err => {
     loadingMsg.innerHTML = `
@@ -416,6 +544,7 @@ function setView(mode){
   document.getElementById('thresholdGroup').style.display = (mode==='cluster') ? 'none' : 'block';
   document.getElementById('clusterGroup').style.display = (mode==='cluster') ? 'block' : 'none';
   document.getElementById('legendWrap').style.display = (mode==='cluster') ? 'none' : 'flex';
+  updateExplain();
   render();
 }
 document.getElementById('viewHeat').addEventListener('click', ()=> setView('heat'));
