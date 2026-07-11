@@ -1,0 +1,1 @@
+﻿web: gunicorn kanz_backend:app
