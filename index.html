@@ -120,6 +120,20 @@
 <div class="layout">
   <div class="controls">
     <div class="control-group">
+      <label data-i18n="l-search">Search any location</label>
+      <input type="text" id="searchInput" placeholder="e.g. Djebel Onk, Tindouf, Carajas..."
+        style="width:100%; background:var(--ink); color:var(--sand); border:1px solid var(--line); padding:9px 10px; border-radius:6px; font-size:14px;">
+      <button id="searchBtn" style="width:100%; margin-top:8px; padding:9px; background:var(--rust); color:var(--sand); border:none; border-radius:6px; font-weight:600; cursor:pointer;" data-i18n="btn-search">Search & Analyze</button>
+      <div id="searchStatus" style="font-size:12px; color:var(--sand-dim); margin-top:8px; font-family:monospace;"></div>
+    </div>
+
+    <div class="control-group" id="livePredictionBox" style="display:none; border:1px solid var(--ochre); border-radius:8px; padding:14px;">
+      <label data-i18n="l-liveresult">Live model prediction</label>
+      <div style="font-size:28px; font-weight:700; color:var(--ochre);" id="liveProbability">—</div>
+      <div style="font-size:12px; color:var(--sand-dim); margin-top:6px;" id="liveConfidenceNote"></div>
+    </div>
+
+    <div class="control-group">
       <label data-i18n="l-index">Spectral index</label>
       <select id="indexSelect">
         <option value="iron" data-i18n="opt-iron">Iron oxide (B4/B2)</option>
@@ -230,6 +244,7 @@ const i18n = {
     'l-stats':'Live stats','s-min':'Min','s-max':'Max','s-mean':'Mean','s-count':'Highlighted pixels','s-area':'Approx. area',
     'l-cursor':'Cursor readout','s-iron':'Iron','s-ferrous':'Ferrous','s-clay':'Clay','s-coord':'Location',
     's-low':'Low','s-high':'High','loading':'Loading kanz_data.json…',
+    'l-search':'Search any location','btn-search':'Search & Analyze','l-liveresult':'Live model prediction',
     'btn-howto':'? How to read this','ex-title':'What am I looking at?','ex-warnLabel':'Important:',
     'ip-title':'How to read Kanz, step by step',
     'ip-step1':'This map is not a photo — it\'s real satellite measurements turned into color. Each pixel\'s color shows how strongly that spot reflects certain wavelengths of light, which can hint at mineral content.',
@@ -252,6 +267,7 @@ const i18n = {
     'l-stats':'Statistiques en direct','s-min':'Min','s-max':'Max','s-mean':'Moyenne','s-count':'Pixels surlignés','s-area':'Surface approx.',
     'l-cursor':'Lecture du curseur','s-iron':'Fer','s-ferrous':'Ferreux','s-clay':'Argile','s-coord':'Position',
     's-low':'Faible','s-high':'Élevé','loading':'Chargement de kanz_data.json…',
+    'l-search':'Rechercher un lieu','btn-search':'Rechercher et analyser','l-liveresult':'Prédiction en direct',
     'btn-howto':'? Comment lire ceci','ex-title':'Qu\'est-ce que je regarde ?','ex-warnLabel':'Important :',
     'ip-title':'Comment lire Kanz, étape par étape',
     'ip-step1':'Cette carte n\'est pas une photo — ce sont de vraies mesures satellite converties en couleur. La couleur de chaque pixel montre l\'intensité de réflexion de certaines longueurs d\'onde, ce qui peut indiquer une teneur minérale.',
@@ -274,6 +290,7 @@ const i18n = {
     'l-stats':'إحصائيات حية','s-min':'الأدنى','s-max':'الأقصى','s-mean':'المتوسط','s-count':'البكسلات المميزة','s-area':'المساحة التقريبية',
     'l-cursor':'قراءة المؤشر','s-iron':'حديد','s-ferrous':'حديدي','s-clay':'طين','s-coord':'الموقع',
     's-low':'منخفض','s-high':'مرتفع','loading':'جارٍ تحميل kanz_data.json…',
+    'l-search':'ابحث عن أي موقع','btn-search':'بحث وتحليل','l-liveresult':'التنبؤ الحي للنموذج',
     'btn-howto':'؟ كيف تقرأ هذا','ex-title':'ماذا أشاهد؟','ex-warnLabel':'مهم:',
     'ip-title':'كيفية قراءة كنز، خطوة بخطوة',
     'ip-step1':'هذه الخريطة ليست صورة — إنها قياسات ساتلية حقيقية تم تحويلها إلى ألوان. يُظهر لون كل بكسل مدى قوة انعكاس ذلك الموقع لأطوال موجية معينة من الضوء، والتي يمكن أن تشير إلى محتوى معدني.',
@@ -317,6 +334,66 @@ function updateExplain(){
 
 // --- Real region bounds used during export (kanz_export.py): [-7.05, 26.83, -6.39, 26.93] ---
 const BOUNDS = {lonMin:-7.05, latMin:26.83, lonMax:-6.39, latMax:26.93};
+
+// Your live Render backend
+const BACKEND_URL = "https://kanz-e4jl.onrender.com";
+
+const searchBtn = document.getElementById('searchBtn');
+const searchInput = document.getElementById('searchInput');
+const searchStatus = document.getElementById('searchStatus');
+const livePredictionBox = document.getElementById('livePredictionBox');
+const liveProbability = document.getElementById('liveProbability');
+const liveConfidenceNote = document.getElementById('liveConfidenceNote');
+
+async function geocodeAndPredict(query){
+  searchStatus.textContent = "Searching for location...";
+  livePredictionBox.style.display = "none";
+
+  try {
+    // Step 1: geocode the place name to real coordinates (free, no key needed)
+    const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`);
+    const geoData = await geoRes.json();
+
+    if(!geoData || geoData.length === 0){
+      searchStatus.textContent = "Location not found. Try a different name or spelling.";
+      return;
+    }
+
+    const lat = parseFloat(geoData[0].lat);
+    const lon = parseFloat(geoData[0].lon);
+    const displayName = geoData[0].display_name;
+
+    searchStatus.textContent = `Found: ${displayName.slice(0,60)}... Waking up model (can take up to 30s if idle)...`;
+
+    // Step 2: send coordinates to our real backend for live prediction
+    const predRes = await fetch(`${BACKEND_URL}/predict?lat=${lat}&lon=${lon}`);
+    const predData = await predRes.json();
+
+    if(predData.error){
+      searchStatus.textContent = `Model error: ${predData.error}`;
+      return;
+    }
+
+    livePredictionBox.style.display = "block";
+    liveProbability.textContent = `${(predData.probability * 100).toFixed(1)}%`;
+    liveConfidenceNote.textContent = predData.confidence_note;
+    searchStatus.textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}° — live Sentinel-2 data`;
+
+  } catch(err){
+    searchStatus.textContent = "Error reaching the backend. It may be waking up - try again in 30 seconds.";
+  }
+}
+
+searchBtn.addEventListener('click', ()=>{
+  const query = searchInput.value.trim();
+  if(query) geocodeAndPredict(query);
+});
+searchInput.addEventListener('keypress', e=>{
+  if(e.key === 'Enter'){
+    const query = searchInput.value.trim();
+    if(query) geocodeAndPredict(query);
+  }
+});
 
 let DATA = null;
 let currentIndex = 'iron';
