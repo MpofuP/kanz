@@ -93,6 +93,64 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/grid", methods=["GET"])
+def grid():
+    try:
+        center_lat = float(request.args.get("lat"))
+        center_lon = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Missing or invalid lat/lon parameters"}), 400
+    try:
+        grid_size = 10
+        span = 0.15
+        lats = np.linspace(center_lat - span, center_lat + span, grid_size)
+        lons = np.linspace(center_lon - span, center_lon + span, grid_size)
+        points = []
+        for la in lats:
+            for lo in lons:
+                points.append(ee.Feature(ee.Geometry.Point([lo, la]), {"lat": la, "lon": lo}))
+        fc = ee.FeatureCollection(points)
+        region = fc.geometry().bounds().buffer(5000)
+        s2 = (
+            ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+            .filterBounds(region)
+            .filterDate("2023-01-01", "2026-06-01")
+            .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 30))
+            .median()
+        )
+        red = s2.select("B4").divide(10000)
+        blue = s2.select("B2").divide(10000)
+        nir = s2.select("B8").divide(10000)
+        swir1 = s2.select("B11").divide(10000)
+        swir2 = s2.select("B12").divide(10000)
+        combined = (
+            red.divide(blue).rename("iron").toFloat()
+            .addBands(swir2.divide(nir).rename("ferrous").toFloat())
+            .addBands(swir1.divide(swir2).rename("clay").toFloat())
+            .addBands(nir.subtract(red).divide(nir.add(red)).rename("ndvi").toFloat())
+            .addBands(swir1.divide(nir).rename("carbonate").toFloat())
+            .addBands(dem.rename("elevation").toFloat())
+            .addBands(slope_img.rename("slope").toFloat())
+        )
+        sampled = combined.reduceRegions(collection=fc, reducer=ee.Reducer.first(), scale=100)
+        result = sampled.getInfo()
+        grid_points = []
+        for feat in result["features"]:
+            props = feat["properties"]
+            if all(k in props and props[k] is not None for k in FEATURE_NAMES):
+                X = np.array([[props[k] for k in FEATURE_NAMES]])
+                prob = float(model.predict_proba(X)[0][1])
+                grid_points.append({"lat": props["lat"], "lon": props["lon"], "probability": round(prob, 4)})
+        return jsonify({
+            "center": {"lat": center_lat, "lon": center_lon},
+            "bounds": {"latMin": center_lat - span, "latMax": center_lat + span, "lonMin": center_lon - span, "lonMax": center_lon + span},
+            "grid_size": grid_size,
+            "points": grid_points,
+            "confidence_note": "Model AUC ~0.61-0.62 - moderate confidence, screening tool only"
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
@@ -100,3 +158,4 @@ def health():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
