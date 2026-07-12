@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kanz — Live Prospectivity Viewer</title>
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --ink:#14100d; --panel:#1e1812; --sand:#EFE6D4; --sand-dim:#a89e8a;
@@ -45,6 +47,19 @@
   .viewer{padding:24px; display:flex; flex-direction:column; align-items:center; overflow:auto;}
   .map-frame{position:relative; width:100%; max-width:1400px; display:flex; gap:0;}
   .canvas-wrap{position:relative; border:1px solid var(--line); border-radius:6px; overflow:hidden; flex:1;}
+  #realMapWrap{width:100%; max-width:1400px; height:560px; border:1px solid var(--line); border-radius:6px; overflow:hidden; display:none;}
+  #realMap{width:100%; height:100%; background:#111;}
+  .view-toggle-top{display:flex; gap:8px; margin-bottom:16px;}
+  .view-toggle-top button{
+    padding:9px 18px; background:var(--panel); border:1px solid var(--line); color:var(--sand-dim);
+    border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;
+  }
+  .view-toggle-top button.active{background:var(--rust); color:var(--sand); border-color:var(--rust);}
+  .leaflet-popup-content{font-family:'Segoe UI',sans-serif; font-size:13px;}
+  .map-resolution-note{
+    max-width:1400px; width:100%; margin-top:10px; font-size:11px; color:var(--sand-dim);
+    font-family:monospace; text-align:center; padding:8px; background:rgba(217,164,65,0.08); border-radius:6px;
+  }
   canvas{display:block; cursor:crosshair; width:100%; height:auto;}
   #gridOverlay{position:absolute; inset:0; pointer-events:none;}
   #tooltip{position:absolute; pointer-events:none; background:rgba(20,16,13,0.96); border:1px solid var(--ochre); border-radius:4px; padding:7px 11px; font-family:monospace; font-size:12px; display:none; z-index:10; white-space:nowrap;}
@@ -183,6 +198,18 @@
   </div>
 
   <div class="viewer">
+    <div class="view-toggle-top">
+      <button id="toggleCanvasView" class="active" data-i18n="tv-static">Static Data View (Gara Djebilet)</button>
+      <button id="toggleRealMapView" data-i18n="tv-realmap">Real Map (search any location)</button>
+    </div>
+
+    <div id="realMapWrap">
+      <div id="realMap"></div>
+    </div>
+    <div class="map-resolution-note" id="mapResolutionNote" style="display:none;" data-i18n="map-resnote">
+      Data resolution: ~11km per grid cell — colored squares indicate general zones for screening, not pinpoint drilling locations. Zoom in to see real roads, terrain, and structures underneath.
+    </div>
+
     <div id="loadingMsg" class="loading" data-i18n="loading">Loading kanz_data.json…</div>
     <div class="map-frame">
       <div class="canvas-wrap" id="canvasWrap" style="display:none;">
@@ -245,6 +272,8 @@ const i18n = {
     'l-cursor':'Cursor readout','s-iron':'Iron','s-ferrous':'Ferrous','s-clay':'Clay','s-coord':'Location',
     's-low':'Low','s-high':'High','loading':'Loading kanz_data.json…',
     'l-search':'Search any location','btn-search':'Search & Analyze','l-liveresult':'Live model prediction',
+    'tv-static':'Static Data View (Gara Djebilet)','tv-realmap':'Real Map (search any location)',
+    'map-resnote':'Data resolution: ~11km per grid cell — colored squares indicate general zones for screening, not pinpoint drilling locations. Zoom in to see real roads, terrain, and structures underneath.',
     'btn-howto':'? How to read this','ex-title':'What am I looking at?','ex-warnLabel':'Important:',
     'ip-title':'How to read Kanz, step by step',
     'ip-step1':'This map is not a photo — it\'s real satellite measurements turned into color. Each pixel\'s color shows how strongly that spot reflects certain wavelengths of light, which can hint at mineral content.',
@@ -268,6 +297,8 @@ const i18n = {
     'l-cursor':'Lecture du curseur','s-iron':'Fer','s-ferrous':'Ferreux','s-clay':'Argile','s-coord':'Position',
     's-low':'Faible','s-high':'Élevé','loading':'Chargement de kanz_data.json…',
     'l-search':'Rechercher un lieu','btn-search':'Rechercher et analyser','l-liveresult':'Prédiction en direct',
+    'tv-static':'Données statiques (Gara Djebilet)','tv-realmap':'Carte réelle (rechercher un lieu)',
+    'map-resnote':'Résolution des données : ~11 km par cellule — les carrés colorés indiquent des zones générales à des fins de présélection, pas un emplacement de forage précis. Zoomez pour voir les routes, le relief et les structures réelles en dessous.',
     'btn-howto':'? Comment lire ceci','ex-title':'Qu\'est-ce que je regarde ?','ex-warnLabel':'Important :',
     'ip-title':'Comment lire Kanz, étape par étape',
     'ip-step1':'Cette carte n\'est pas une photo — ce sont de vraies mesures satellite converties en couleur. La couleur de chaque pixel montre l\'intensité de réflexion de certaines longueurs d\'onde, ce qui peut indiquer une teneur minérale.',
@@ -291,6 +322,8 @@ const i18n = {
     'l-cursor':'قراءة المؤشر','s-iron':'حديد','s-ferrous':'حديدي','s-clay':'طين','s-coord':'الموقع',
     's-low':'منخفض','s-high':'مرتفع','loading':'جارٍ تحميل kanz_data.json…',
     'l-search':'ابحث عن أي موقع','btn-search':'بحث وتحليل','l-liveresult':'التنبؤ الحي للنموذج',
+    'tv-static':'عرض البيانات الثابتة (قارة جبيلات)','tv-realmap':'خريطة حقيقية (ابحث عن أي موقع)',
+    'map-resnote':'دقة البيانات: حوالي 11 كم لكل خلية شبكية — المربعات الملونة تشير إلى مناطق عامة للفرز الأولي، وليست مواقع حفر دقيقة. قم بالتكبير لرؤية الطرق والتضاريس والهياكل الحقيقية أدناه.',
     'btn-howto':'؟ كيف تقرأ هذا','ex-title':'ماذا أشاهد؟','ex-warnLabel':'مهم:',
     'ip-title':'كيفية قراءة كنز، خطوة بخطوة',
     'ip-step1':'هذه الخريطة ليست صورة — إنها قياسات ساتلية حقيقية تم تحويلها إلى ألوان. يُظهر لون كل بكسل مدى قوة انعكاس ذلك الموقع لأطوال موجية معينة من الضوء، والتي يمكن أن تشير إلى محتوى معدني.',
@@ -377,12 +410,82 @@ async function geocodeAndPredict(query){
     livePredictionBox.style.display = "block";
     liveProbability.textContent = `${(predData.probability * 100).toFixed(1)}%`;
     liveConfidenceNote.textContent = predData.confidence_note;
-    searchStatus.textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}° — live Sentinel-2 data`;
+    searchStatus.textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}° — fetching full area grid...`;
+
+    // Step 3: switch to the real map view and load the full grid overlay
+    if(viewToggleMode !== 'realmap') setViewMode('realmap');
+    await loadGridOnMap(lat, lon);
+    searchStatus.textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}° — live Sentinel-2 grid loaded`;
 
   } catch(err){
     searchStatus.textContent = "Error reaching the backend. It may be waking up - try again in 30 seconds.";
   }
 }
+
+// --- Real Leaflet map ---
+let leafletMap = null;
+let gridLayerGroup = null;
+let viewToggleMode = 'canvas';
+
+function initRealMap(){
+  if(leafletMap) return;
+  leafletMap = L.map('realMap').setView([26.88222, -7.00028], 9);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Esri World Imagery', maxZoom: 18
+  }).addTo(leafletMap);
+  gridLayerGroup = L.layerGroup().addTo(leafletMap);
+}
+
+function probColor(p){
+  if(p < 0.3) return '#3a1c10';
+  if(p < 0.45) return '#7a2410';
+  if(p < 0.6) return '#c4451f';
+  if(p < 0.75) return '#d9a441';
+  return '#f5e6c8';
+}
+
+async function loadGridOnMap(lat, lon){
+  initRealMap();
+  leafletMap.setView([lat, lon], 10);
+  gridLayerGroup.clearLayers();
+  document.getElementById('mapResolutionNote').style.display = 'block';
+  L.marker([lat, lon]).addTo(gridLayerGroup).bindPopup(`Searched location<br>${lat.toFixed(4)}, ${lon.toFixed(4)}`);
+
+  try {
+    const gridRes = await fetch(`${BACKEND_URL}/grid?lat=${lat}&lon=${lon}`);
+    const gridData = await gridRes.json();
+    if(gridData.error){
+      searchStatus.textContent = `Grid error: ${gridData.error}`;
+      return;
+    }
+    const n = gridData.grid_size;
+    const cellLat = (gridData.bounds.latMax - gridData.bounds.latMin) / n;
+    const cellLon = (gridData.bounds.lonMax - gridData.bounds.lonMin) / n;
+    gridData.points.forEach(pt => {
+      const color = probColor(pt.probability);
+      const bounds = [[pt.lat - cellLat/2, pt.lon - cellLon/2], [pt.lat + cellLat/2, pt.lon + cellLon/2]];
+      L.rectangle(bounds, {color, weight:0, fillColor:color, fillOpacity:0.55}).addTo(gridLayerGroup)
+        .bindPopup(`Probability: <strong>${(pt.probability*100).toFixed(1)}%</strong><br>${pt.lat.toFixed(3)}, ${pt.lon.toFixed(3)}`);
+    });
+  } catch(err){
+    searchStatus.textContent = "Grid failed to load - backend may still be waking up, try again.";
+  }
+}
+
+function setViewMode(mode){
+  viewToggleMode = mode;
+  document.getElementById('toggleCanvasView').classList.toggle('active', mode==='canvas');
+  document.getElementById('toggleRealMapView').classList.toggle('active', mode==='realmap');
+  document.getElementById('canvasWrap').style.display = (mode==='canvas') ? 'block' : 'none';
+  document.getElementById('realMapWrap').style.display = (mode==='realmap') ? 'block' : 'none';
+  document.getElementById('explainBox').style.display = (mode==='canvas') ? 'block' : 'none';
+  if(mode==='realmap'){
+    initRealMap();
+    setTimeout(()=> leafletMap.invalidateSize(), 100);
+  }
+}
+document.getElementById('toggleCanvasView').addEventListener('click', ()=> setViewMode('canvas'));
+document.getElementById('toggleRealMapView').addEventListener('click', ()=> setViewMode('realmap'));
 
 searchBtn.addEventListener('click', ()=>{
   const query = searchInput.value.trim();
