@@ -155,8 +155,9 @@
     </div>
 
     <div class="control-group">
-      <label data-i18n="l-export">Export</label>
-      <button id="downloadBtn" class="btn-secondary" data-i18n="btn-download">Download grid as GeoJSON</button>
+      <label data-i18n="l-export">Save these results</label>
+      <button id="downloadKmlBtn" class="btn-primary" data-i18n="btn-download-kml">Download for Google Earth (KML)</button>
+      <button id="downloadBtn" class="btn-secondary" style="margin-top:6px;" data-i18n="btn-download">Advanced: Download as GeoJSON (QGIS/ArcGIS)</button>
     </div>
 
     <div class="control-group">
@@ -193,7 +194,7 @@
 const i18n = {
   en:{dir:'ltr', 'l-search':'Search any location','btn-search':'Search & Analyze','l-liveresult':'Center-point prediction',
     'l-ranked':'Top candidate zones (this search)','ranked-empty':'Search a location to see ranked zones here.',
-    'l-export':'Export','btn-download':'Download grid as GeoJSON',
+    'l-export':'Save these results','btn-download':'Advanced: Download as GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Download for Google Earth (KML)',
     'l-stats':'Grid summary','s-points':'Points loaded','s-avgprob':'Average probability','s-maxprob':'Highest probability',
     'btn-howto':'? How to read this',
     'map-resnote':'Data resolution: ~11km per grid cell — colored squares indicate general zones for screening, not pinpoint drilling locations.',
@@ -207,7 +208,7 @@ const i18n = {
   },
   fr:{dir:'ltr', 'l-search':'Rechercher un lieu','btn-search':'Rechercher et analyser','l-liveresult':'Prédiction du point central',
     'l-ranked':'Zones candidates principales (cette recherche)','ranked-empty':'Recherchez un lieu pour voir les zones classées ici.',
-    'l-export':'Exporter','btn-download':'Télécharger la grille en GeoJSON',
+    'l-export':'Enregistrer ces résultats','btn-download':'Avancé : télécharger en GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Télécharger pour Google Earth (KML)',
     'l-stats':'Résumé de la grille','s-points':'Points chargés','s-avgprob':'Probabilité moyenne','s-maxprob':'Probabilité la plus élevée',
     'btn-howto':'? Comment lire ceci',
     'map-resnote':'Résolution des données : ~11 km par cellule — les carrés colorés indiquent des zones générales de présélection, pas un emplacement de forage précis.',
@@ -221,7 +222,7 @@ const i18n = {
   },
   ar:{dir:'rtl', 'l-search':'ابحث عن أي موقع','btn-search':'بحث وتحليل','l-liveresult':'تنبؤ النقطة المركزية',
     'l-ranked':'أفضل المناطق المرشحة (لهذا البحث)','ranked-empty':'ابحث عن موقع لرؤية المناطق المصنفة هنا.',
-    'l-export':'تصدير','btn-download':'تحميل الشبكة كـ GeoJSON',
+    'l-export':'احفظ هذه النتائج','btn-download':'متقدم: تحميل كـ GeoJSON (QGIS/ArcGIS)','btn-download-kml':'تحميل لبرنامج Google Earth (KML)',
     'l-stats':'ملخص الشبكة','s-points':'النقاط المحملة','s-avgprob':'متوسط الاحتمالية','s-maxprob':'أعلى احتمالية',
     'btn-howto':'؟ كيف تقرأ هذا',
     'map-resnote':'دقة البيانات: حوالي 11 كم لكل خلية شبكية — المربعات الملونة تشير إلى مناطق عامة للفرز الأولي، وليست مواقع حفر دقيقة.',
@@ -270,7 +271,7 @@ function initRealMap(){
   if(leafletMap) return;
   leafletMap = L.map('realMap', {zoomControl:true}).setView([26.88222, -7.00028], 9);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Esri World Imagery', maxZoom: 18
+    attribution: 'Esri World Imagery', maxZoom: 18, maxNativeZoom: 15
   }).addTo(leafletMap);
   gridLayerGroup = L.layerGroup().addTo(leafletMap);
 }
@@ -344,6 +345,19 @@ function updateStatsAndRanking(gridData){
   const sorted = [...gridData.points].sort((a,b)=> b.probability - a.probability).slice(0,5);
   const rankedList = document.getElementById('rankedList');
   rankedList.innerHTML = '';
+
+  // Star icon for top zones, colored gold, numbered
+  const starIcon = (num) => L.divIcon({
+    className: 'top-zone-marker',
+    html: `<div style="
+      width:28px; height:28px; border-radius:50%; background:#d9a441;
+      border:2px solid #14100d; color:#14100d; font-weight:700; font-size:13px;
+      display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.5);
+    ">${num}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+
   sorted.forEach((pt, i)=>{
     const item = document.createElement('div');
     item.className = 'ranked-item';
@@ -355,6 +369,11 @@ function updateStatsAndRanking(gridData){
       leafletMap.setView([pt.lat, pt.lon], 13);
     });
     rankedList.appendChild(item);
+
+    // Real, visible marker directly on the map at this exact ranked spot
+    L.marker([pt.lat, pt.lon], {icon: starIcon(i+1), zIndexOffset: 1000})
+      .addTo(gridLayerGroup)
+      .bindPopup(`<strong>Candidate #${i+1}</strong><br>Probability: ${(pt.probability*100).toFixed(1)}%<br>${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}`);
   });
 }
 
@@ -406,6 +425,65 @@ searchInput.addEventListener('keypress', e=>{
     const query = searchInput.value.trim();
     if(query) geocodeAndPredict(query);
   }
+});
+
+document.getElementById('downloadKmlBtn').addEventListener('click', ()=>{
+  if(!lastGridData){
+    alert('Search a location first to generate results to download.');
+    return;
+  }
+
+  const sorted = [...lastGridData.points].sort((a,b)=> b.probability - a.probability);
+  const topFive = sorted.slice(0,5);
+
+  function kmlColorFor(p){
+    // KML uses AABBGGRR hex order (opposite of normal hex)
+    if(p < 0.3) return 'ff101c3a';
+    if(p < 0.45) return 'ff10247a';
+    if(p < 0.6) return 'ff1f45c4';
+    if(p < 0.75) return 'ff41a4d9';
+    return 'ffc8e6f5';
+  }
+
+  let placemarks = lastGridData.points.map(pt => `
+    <Placemark>
+      <name>${(pt.probability*100).toFixed(0)}%</name>
+      <description>Probability: ${(pt.probability*100).toFixed(1)}%\nLocation: ${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}</description>
+      <Style><IconStyle><color>${kmlColorFor(pt.probability)}</color><scale>0.7</scale></IconStyle></Style>
+      <Point><coordinates>${pt.lon},${pt.lat},0</coordinates></Point>
+    </Placemark>`).join('');
+
+  let topMarkers = topFive.map((pt, i) => `
+    <Placemark>
+      <name>Top Candidate #${i+1} - ${(pt.probability*100).toFixed(0)}%</name>
+      <description>Kanz ranked candidate zone #${i+1}\nProbability: ${(pt.probability*100).toFixed(1)}%\nLocation: ${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}\n\nThis is a screening estimate only - not a confirmed deposit. See Kanz's confidence note for details.</description>
+      <Style><IconStyle><color>ff41a4d9</color><scale>1.3</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/star.png</href></Icon></IconStyle></Style>
+      <Point><coordinates>${pt.lon},${pt.lat},0</coordinates></Point>
+    </Placemark>`).join('');
+
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document>
+  <name>Kanz Prospectivity Results - ${lastGridData.center.lat.toFixed(3)}, ${lastGridData.center.lon.toFixed(3)}</name>
+  <description>Generated by Kanz. Model confidence: moderate (AUC ~0.61-0.62). This is a screening tool, not a confirmed deposit map.</description>
+  <Folder>
+    <name>Top 5 Candidate Zones</name>
+    ${topMarkers}
+  </Folder>
+  <Folder>
+    <name>Full Grid (all points)</name>
+    ${placemarks}
+  </Folder>
+</Document>
+</kml>`;
+
+  const blob = new Blob([kml], {type: "application/vnd.google-earth.kml+xml"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kanz_results_${lastGridData.center.lat.toFixed(3)}_${lastGridData.center.lon.toFixed(3)}.kml`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 document.getElementById('downloadBtn').addEventListener('click', ()=>{
