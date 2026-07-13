@@ -76,6 +76,29 @@
     display:none;
   }
 
+  .map-legend{
+    position:absolute; bottom:14px; right:14px; z-index:500;
+    background:rgba(20,16,13,0.92); border:1px solid var(--line); border-radius:8px;
+    padding:12px 14px; display:none; font-size:11px;
+  }
+  [dir="rtl"] .map-legend{right:auto; left:14px;}
+  .map-legend.show{display:block;}
+  .map-legend-title{font-weight:700; color:var(--ochre); margin-bottom:8px; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;}
+  .legend-row{display:flex; align-items:center; gap:8px; margin-bottom:5px;}
+  .legend-swatch{width:14px; height:14px; border-radius:3px; flex-shrink:0;}
+
+  .verdict-banner{
+    position:absolute; top:14px; left:14px; right:14px; z-index:550;
+    padding:14px 20px; border-radius:8px; display:none;
+    font-size:14px; font-weight:600; text-align:center;
+  }
+  [dir="rtl"] .verdict-banner{right:14px; left:14px;}
+  .verdict-banner.show{display:block;}
+  .verdict-low{background:rgba(122,36,16,0.92); color:#f5e6c8; border:1px solid #7a2410;}
+  .verdict-mid{background:rgba(196,69,31,0.92); color:#f5e6c8; border:1px solid #c4451f;}
+  .verdict-high{background:rgba(217,164,65,0.95); color:#14100d; border:1px solid #d9a441;}
+  .verdict-sub{font-size:11.5px; font-weight:400; margin-top:4px; opacity:0.9;}
+
   .info-panel{
     display:none; position:absolute; top:14px; right:14px; left:14px; z-index:600; max-width:600px;
     padding:20px 24px; background:var(--panel); border:1px solid var(--ochre); border-radius:8px;
@@ -156,7 +179,8 @@
 
     <div class="control-group">
       <label data-i18n="l-export">Save these results</label>
-      <button id="downloadKmlBtn" class="btn-primary" data-i18n="btn-download-kml">Download for Google Earth (KML)</button>
+      <button id="downloadHtmlBtn" class="btn-primary" data-i18n="btn-download-html">Download Simple Report (opens anywhere)</button>
+      <button id="downloadKmlBtn" class="btn-secondary" style="margin-top:6px;" data-i18n="btn-download-kml">Download for Google Earth (KML)</button>
       <button id="downloadBtn" class="btn-secondary" style="margin-top:6px;" data-i18n="btn-download">Advanced: Download as GeoJSON (QGIS/ArcGIS)</button>
     </div>
 
@@ -172,6 +196,20 @@
     <div id="realMap"></div>
     <div class="resolution-note" id="resolutionNote" data-i18n="map-resnote">
       Data resolution: ~11km per grid cell — colored squares indicate general zones for screening, not pinpoint drilling locations.
+    </div>
+
+    <div class="verdict-banner" id="verdictBanner">
+      <div id="verdictMain"></div>
+      <div class="verdict-sub" id="verdictSub"></div>
+    </div>
+
+    <div class="map-legend" id="mapLegend">
+      <div class="map-legend-title" data-i18n="legend-title">Probability Key</div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#3a1c10"></div><span data-i18n="legend-verylow">Very low (&lt;30%)</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#7a2410"></div><span data-i18n="legend-low">Low (30-45%)</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#c4451f"></div><span data-i18n="legend-mid">Moderate (45-60%)</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#d9a441"></div><span data-i18n="legend-high">High (60-75%)</span></div>
+      <div class="legend-row"><div class="legend-swatch" style="background:#f5e6c8"></div><span data-i18n="legend-veryhigh">Very high (&gt;75%)</span></div>
     </div>
     <div class="loading-overlay" id="loadingOverlay">
       <div class="spinner"></div>
@@ -194,10 +232,11 @@
 const i18n = {
   en:{dir:'ltr', 'l-search':'Search any location','btn-search':'Search & Analyze','l-liveresult':'Center-point prediction',
     'l-ranked':'Top candidate zones (this search)','ranked-empty':'Search a location to see ranked zones here.',
-    'l-export':'Save these results','btn-download':'Advanced: Download as GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Download for Google Earth (KML)',
+    'l-export':'Save these results','btn-download':'Advanced: Download as GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Download for Google Earth (KML)','btn-download-html':'Download Simple Report (opens anywhere)',
     'l-stats':'Grid summary','s-points':'Points loaded','s-avgprob':'Average probability','s-maxprob':'Highest probability',
     'btn-howto':'? How to read this',
     'map-resnote':'Data resolution: ~11km per grid cell — colored squares indicate general zones for screening, not pinpoint drilling locations.',
+    'legend-title':'Probability Key','legend-verylow':'Very low (<30%)','legend-low':'Low (30-45%)','legend-mid':'Moderate (45-60%)','legend-high':'High (60-75%)','legend-veryhigh':'Very high (>75%)',
     'ip-title':'How Kanz works, step by step',
     'ip-step1':'Type any place name and click Search. Kanz finds its real coordinates, pulls fresh satellite data, and runs a trained model to estimate mineral prospectivity.',
     'ip-step2':'The colored squares on the map are NOT a photo — each one is a model prediction for that patch of ground. Brighter gold/white = higher predicted probability.',
@@ -208,10 +247,11 @@ const i18n = {
   },
   fr:{dir:'ltr', 'l-search':'Rechercher un lieu','btn-search':'Rechercher et analyser','l-liveresult':'Prédiction du point central',
     'l-ranked':'Zones candidates principales (cette recherche)','ranked-empty':'Recherchez un lieu pour voir les zones classées ici.',
-    'l-export':'Enregistrer ces résultats','btn-download':'Avancé : télécharger en GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Télécharger pour Google Earth (KML)',
+    'l-export':'Enregistrer ces résultats','btn-download':'Avancé : télécharger en GeoJSON (QGIS/ArcGIS)','btn-download-kml':'Télécharger pour Google Earth (KML)','btn-download-html':'Télécharger le rapport simple (s\'ouvre partout)',
     'l-stats':'Résumé de la grille','s-points':'Points chargés','s-avgprob':'Probabilité moyenne','s-maxprob':'Probabilité la plus élevée',
     'btn-howto':'? Comment lire ceci',
     'map-resnote':'Résolution des données : ~11 km par cellule — les carrés colorés indiquent des zones générales de présélection, pas un emplacement de forage précis.',
+    'legend-title':'Légende de probabilité','legend-verylow':'Très faible (<30%)','legend-low':'Faible (30-45%)','legend-mid':'Modérée (45-60%)','legend-high':'Élevée (60-75%)','legend-veryhigh':'Très élevée (>75%)',
     'ip-title':'Comment fonctionne Kanz, étape par étape',
     'ip-step1':'Tapez un nom de lieu et cliquez sur Rechercher. Kanz trouve ses coordonnées réelles, récupère des données satellite fraîches, et exécute un modèle entraîné pour estimer la prospectivité minérale.',
     'ip-step2':'Les carrés colorés sur la carte ne sont PAS une photo — chacun est une prédiction du modèle pour cette parcelle de terrain. Plus doré/blanc = probabilité prédite plus élevée.',
@@ -222,10 +262,11 @@ const i18n = {
   },
   ar:{dir:'rtl', 'l-search':'ابحث عن أي موقع','btn-search':'بحث وتحليل','l-liveresult':'تنبؤ النقطة المركزية',
     'l-ranked':'أفضل المناطق المرشحة (لهذا البحث)','ranked-empty':'ابحث عن موقع لرؤية المناطق المصنفة هنا.',
-    'l-export':'احفظ هذه النتائج','btn-download':'متقدم: تحميل كـ GeoJSON (QGIS/ArcGIS)','btn-download-kml':'تحميل لبرنامج Google Earth (KML)',
+    'l-export':'احفظ هذه النتائج','btn-download':'متقدم: تحميل كـ GeoJSON (QGIS/ArcGIS)','btn-download-kml':'تحميل لبرنامج Google Earth (KML)','btn-download-html':'تحميل تقرير بسيط (يفتح في أي مكان)',
     'l-stats':'ملخص الشبكة','s-points':'النقاط المحملة','s-avgprob':'متوسط الاحتمالية','s-maxprob':'أعلى احتمالية',
     'btn-howto':'؟ كيف تقرأ هذا',
     'map-resnote':'دقة البيانات: حوالي 11 كم لكل خلية شبكية — المربعات الملونة تشير إلى مناطق عامة للفرز الأولي، وليست مواقع حفر دقيقة.',
+    'legend-title':'مفتاح الاحتمالية','legend-verylow':'منخفضة جدًا (<30%)','legend-low':'منخفضة (30-45%)','legend-mid':'معتدلة (45-60%)','legend-high':'مرتفعة (60-75%)','legend-veryhigh':'مرتفعة جدًا (>75%)',
     'ip-title':'كيف يعمل كنز، خطوة بخطوة',
     'ip-step1':'اكتب اسم أي مكان واضغط بحث. يجد كنز إحداثياته الحقيقية، يسحب بيانات ساتلية حديثة، ويشغل نموذجًا مدربًا لتقدير احتمالية وجود المعادن.',
     'ip-step2':'المربعات الملونة على الخريطة ليست صورة — كل واحدة تنبؤ من النموذج لتلك القطعة من الأرض. الأكثر ذهبيًا/بياضًا = احتمالية متوقعة أعلى.',
@@ -274,6 +315,50 @@ function initRealMap(){
     attribution: 'Esri World Imagery', maxZoom: 18, maxNativeZoom: 15
   }).addTo(leafletMap);
   gridLayerGroup = L.layerGroup().addTo(leafletMap);
+
+  // Click anywhere on the map (not on a colored square) to identify the place name
+  leafletMap.on('click', async (e) => {
+    const { lat, lng } = e.latlng;
+
+    const popup = L.popup()
+      .setLatLng(e.latlng)
+      .setContent('<div style="font-family:monospace; font-size:12px;">Looking up this location...</div>')
+      .openOn(leafletMap);
+
+    // Find nearest grid point's probability, if we have grid data loaded
+    let nearestInfo = '';
+    if(lastGridData && lastGridData.points.length > 0){
+      let nearest = lastGridData.points[0];
+      let minDist = Infinity;
+      lastGridData.points.forEach(pt => {
+        const d = Math.hypot(pt.lat - lat, pt.lon - lng);
+        if(d < minDist){ minDist = d; nearest = pt; }
+      });
+      nearestInfo = `<div style="margin-top:6px;">Nearest computed cell: <strong>${(nearest.probability*100).toFixed(1)}%</strong> probability</div>`;
+    }
+
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10`);
+      const data = await res.json();
+      const placeName = data.display_name ? data.display_name.split(',').slice(0,3).join(',') : 'Unnamed area';
+
+      popup.setContent(`
+        <div style="font-family:'Segoe UI',sans-serif; font-size:12.5px; max-width:220px;">
+          <strong>${placeName}</strong>
+          <div style="font-family:monospace; color:#666; margin-top:4px;">${lat.toFixed(4)}, ${lng.toFixed(4)}</div>
+          ${nearestInfo}
+        </div>
+      `);
+    } catch(err){
+      popup.setContent(`
+        <div style="font-family:monospace; font-size:12px;">
+          ${lat.toFixed(4)}, ${lng.toFixed(4)}
+          ${nearestInfo}
+          <div style="color:#999; margin-top:4px;">(Place name lookup failed)</div>
+        </div>
+      `);
+    }
+  });
 }
 
 function probColor(p){
@@ -333,6 +418,28 @@ async function loadGridForLocation(lat, lon, label){
   }
 }
 
+function showVerdict(avg, max){
+  const banner = document.getElementById('verdictBanner');
+  const main = document.getElementById('verdictMain');
+  const sub = document.getElementById('verdictSub');
+  banner.classList.remove('verdict-low', 'verdict-mid', 'verdict-high');
+  banner.classList.add('show');
+
+  if(max >= 0.75){
+    banner.classList.add('verdict-high');
+    main.textContent = `Strong candidate zone found — up to ${(max*100).toFixed(0)}% probability`;
+    sub.textContent = `Average across the area: ${(avg*100).toFixed(0)}%. Worth a closer look at the top-ranked spots on the left.`;
+  } else if(max >= 0.55){
+    banner.classList.add('verdict-mid');
+    main.textContent = `Moderate signal in this area — best spot at ${(max*100).toFixed(0)}%`;
+    sub.textContent = `Average: ${(avg*100).toFixed(0)}%. Some zones worth reviewing, but no standout candidate yet.`;
+  } else {
+    banner.classList.add('verdict-low');
+    main.textContent = `Low mineral probability across this area — best spot only ${(max*100).toFixed(0)}%`;
+    sub.textContent = `Average: ${(avg*100).toFixed(0)}%. This search did not find a strong candidate zone.`;
+  }
+}
+
 function updateStatsAndRanking(gridData){
   const probs = gridData.points.map(p=>p.probability);
   const avg = probs.reduce((a,b)=>a+b,0) / probs.length;
@@ -341,6 +448,9 @@ function updateStatsAndRanking(gridData){
   document.getElementById('statPoints').textContent = gridData.points.length;
   document.getElementById('statAvg').textContent = (avg*100).toFixed(1) + '%';
   document.getElementById('statMax').textContent = (max*100).toFixed(1) + '%';
+
+  document.getElementById('mapLegend').classList.add('show');
+  showVerdict(avg, max);
 
   const sorted = [...gridData.points].sort((a,b)=> b.probability - a.probability).slice(0,5);
   const rankedList = document.getElementById('rankedList');
@@ -425,6 +535,64 @@ searchInput.addEventListener('keypress', e=>{
     const query = searchInput.value.trim();
     if(query) geocodeAndPredict(query);
   }
+});
+
+document.getElementById('downloadHtmlBtn').addEventListener('click', ()=>{
+  if(!lastGridData){
+    alert('Search a location first to generate results to download.');
+    return;
+  }
+  const sorted = [...lastGridData.points].sort((a,b)=> b.probability - a.probability);
+  const top5 = sorted.slice(0,5);
+  const avg = lastGridData.points.reduce((a,p)=>a+p.probability,0) / lastGridData.points.length;
+  const max = sorted[0].probability;
+
+  let verdictText, verdictColor;
+  if(max >= 0.75){ verdictText = "Strong candidate zone found"; verdictColor = "#d9a441"; }
+  else if(max >= 0.55){ verdictText = "Moderate signal - some zones worth reviewing"; verdictColor = "#c4451f"; }
+  else { verdictText = "Low probability across this area"; verdictColor = "#7a2410"; }
+
+  const rows = top5.map((pt,i)=> `
+    <tr>
+      <td style="padding:10px; border-bottom:1px solid #333;">#${i+1}</td>
+      <td style="padding:10px; border-bottom:1px solid #333; font-family:monospace;">${pt.lat.toFixed(4)}, ${pt.lon.toFixed(4)}</td>
+      <td style="padding:10px; border-bottom:1px solid #333; font-weight:700; color:${probColor(pt.probability)};">${(pt.probability*100).toFixed(1)}%</td>
+      <td style="padding:10px; border-bottom:1px solid #333;"><a href="https://www.google.com/maps?q=${pt.lat},${pt.lon}" target="_blank" style="color:#d9a441;">View on Google Maps</a></td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Kanz Report - ${lastGridData.center.lat.toFixed(3)}, ${lastGridData.center.lon.toFixed(3)}</title>
+<style>
+  body{font-family:'Segoe UI',sans-serif; background:#14100d; color:#EFE6D4; padding:30px; max-width:800px; margin:0 auto;}
+  h1{color:#d9a441;} table{width:100%; border-collapse:collapse; margin-top:20px;}
+  th{text-align:left; padding:10px; border-bottom:2px solid #d9a441; color:#d9a441;}
+  .verdict{padding:16px; border-radius:8px; background:${verdictColor}; color:#14100d; font-weight:700; margin:20px 0;}
+  .note{font-size:13px; color:#a89e8a; margin-top:30px; line-height:1.6; padding:16px; background:rgba(255,255,255,0.05); border-radius:8px;}
+</style></head>
+<body>
+  <h1>Kanz Prospectivity Report</h1>
+  <p>Location searched: <strong>${lastGridData.center.lat.toFixed(4)}, ${lastGridData.center.lon.toFixed(4)}</strong></p>
+  <div class="verdict">${verdictText} — average ${(avg*100).toFixed(1)}%, best spot ${(max*100).toFixed(1)}%</div>
+  <h2>Top 5 Candidate Zones</h2>
+  <table>
+    <tr><th>Rank</th><th>Coordinates</th><th>Probability</th><th>Map Link</th></tr>
+    ${rows}
+  </table>
+  <div class="note">
+    <strong>How to read this:</strong> Kanz is a screening tool using free satellite data and machine learning
+    (model confidence: AUC ~0.61-0.62, moderate — meaningfully better than guessing, not a guarantee).
+    These are zones worth investigating further, not confirmed mineral deposits. Always verify with ground
+    surveys, drilling, or a qualified geologist before making decisions.
+  </div>
+</body></html>`;
+
+  const blob = new Blob([html], {type: "text/html"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `kanz_report_${lastGridData.center.lat.toFixed(3)}_${lastGridData.center.lon.toFixed(3)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 document.getElementById('downloadKmlBtn').addEventListener('click', ()=>{
